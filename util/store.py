@@ -16,8 +16,6 @@ class Store(ndb.Model):
     RTLRID = ndb.StringProperty()    
     RECORDNO = ndb.IntegerProperty()    
 
-    def save(self, dic):
-
         
     
 
