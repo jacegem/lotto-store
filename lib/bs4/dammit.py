@@ -50,7 +50,7 @@ class EntitySubstitution(object):
 
     """Substitute XML or HTML entities for the corresponding characters."""
 
-    def _populate_class_variables():
+    def _populate_class_variables():  # @NoSelf
         lookup = {}
         reverse_lookup = {}
         characters_for_re = []

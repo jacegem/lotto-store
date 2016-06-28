@@ -24,7 +24,7 @@ def hello():
 @app.route('/other')
 def helloOther():
     """Return a friendly HTTP greeting."""
-    return storeList + "<- OUTPUT" 
+    return storeList
 
 
 @app.errorhandler(404)
