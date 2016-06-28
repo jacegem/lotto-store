@@ -4,12 +4,16 @@ from google.appengine.ext import ndb
 from flask import jsonify 
 
 # Import the Flask Framework
-from flask import Flask
+from flask import Flask 
+
+from util import store_manager
 
 app = Flask(__name__)
 # Note: We don't need to call run() since our application is embedded within
-# the App Engine WSGI application server.
+# the App Engine WSGI application server. 
 
+# 초기화
+storeList = store_manager.get_store_list()
 
 @app.route('/')
 def hello():
@@ -19,7 +23,7 @@ def hello():
 @app.route('/other')
 def helloOther():
     """Return a friendly HTTP greeting."""
-    return 'Hello Other World!22'
+    return ''.join(storeList)
 
 
 @app.errorhandler(404)
@@ -32,3 +36,6 @@ def page_not_found(e):
 def application_error(e):
     """Return a custom 500 error."""
     return 'Sorry, unexpected error: {}'.format(e), 500
+
+
+
