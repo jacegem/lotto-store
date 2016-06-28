@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """`main` is the top level module for your Flask application."""
 
-from google.appengine.ext import ndb
-from flask import jsonify 
+# from google.appengine.ext import ndb
+# from flask import jsonify 
 
 # Import the Flask Framework
 from flask import Flask 
@@ -23,7 +24,7 @@ def hello():
 @app.route('/other')
 def helloOther():
     """Return a friendly HTTP greeting."""
-    return ''.join(storeList)
+    return ''.join(storeList) + 'added'
 
 
 @app.errorhandler(404)

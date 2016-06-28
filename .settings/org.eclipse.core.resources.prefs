@@ -1,4 +1,8 @@
 eclipse.preferences.version=1
 encoding//lib/flask/__init__.py=utf-8
 encoding//lib/flask/ext/__init__.py=utf-8
+encoding//lib/flask/globals.py=utf-8
 encoding//lib/flask/json.py=utf-8
+encoding//lib/flask/testsuite/__init__.py=utf-8
+encoding//util/__init__.py=utf-8
+encoding/main.py=utf-8
