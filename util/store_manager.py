@@ -11,17 +11,15 @@ import urllib2
 
 from bs4 import BeautifulSoup
 
-
 def get_store_list():
     response = urllib2.urlopen('http://pythonforbeginners.com/')
     print response.info()
     html = response.read()
     # do something 
     response.close()  # best practice to close the file
-    
+
     soup = BeautifulSoup(html, 'html.parser')
-    print(soup.prettify())
-    soup.find_all('a')
+    all = soup.find_all('a')
     return html
 
 

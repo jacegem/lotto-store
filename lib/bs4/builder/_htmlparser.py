@@ -4,16 +4,10 @@ __all__ = [
     'HTMLParserTreeBuilder',
     ]
 
-from html.parser import HTMLParser
-
-try:
-    from html.parser import HTMLParseError
-except ImportError as e:
-    # HTMLParseError is removed in Python 3.5. Since it can never be
-    # thrown in 3.5, we can just define our own class as a placeholder.
-    class HTMLParseError(Exception):
-        pass
-
+from HTMLParser import (
+    HTMLParser,
+    HTMLParseError,
+    )
 import sys
 import warnings
 
@@ -25,10 +19,10 @@ import warnings
 # At the end of this file, we monkeypatch HTMLParser so that
 # strict=True works well on Python 3.2.2.
 major, minor, release = sys.version_info[:3]
-CONSTRUCTOR_TAKES_STRICT = major == 3 and minor == 2 and release >= 3
-CONSTRUCTOR_STRICT_IS_DEPRECATED = major == 3 and minor == 3
-CONSTRUCTOR_TAKES_CONVERT_CHARREFS = major == 3 and minor >= 4
-
+CONSTRUCTOR_TAKES_STRICT = (
+    major > 3
+    or (major == 3 and minor > 2)
+    or (major == 3 and minor == 2 and release >= 3))
 
 from bs4.element import (
     CData,
@@ -51,15 +45,7 @@ HTMLPARSER = 'html.parser'
 class BeautifulSoupHTMLParser(HTMLParser):
     def handle_starttag(self, name, attrs):
         # XXX namespace
-        attr_dict = {}
-        for key, value in attrs:
-            # Change None attribute values to the empty string
-            # for consistency with the other tree builders.
-            if value is None:
-                value = ''
-            attr_dict[key] = value
-            attrvalue = '""'
-        self.soup.handle_starttag(name, None, None, attr_dict)
+        self.soup.handle_starttag(name, None, None, dict(attrs))
 
     def handle_endtag(self, name):
         self.soup.handle_endtag(name)
@@ -69,19 +55,16 @@ class BeautifulSoupHTMLParser(HTMLParser):
 
     def handle_charref(self, name):
         # XXX workaround for a bug in HTMLParser. Remove this once
-        # it's fixed in all supported versions.
-        # http://bugs.python.org/issue13633
+        # it's fixed.
         if name.startswith('x'):
             real_name = int(name.lstrip('x'), 16)
-        elif name.startswith('X'):
-            real_name = int(name.lstrip('X'), 16)
         else:
             real_name = int(name)
 
         try:
-            data = chr(real_name)
-        except (ValueError, OverflowError) as e:
-            data = "\N{REPLACEMENT CHARACTER}"
+            data = unichr(real_name)
+        except (ValueError, OverflowError), e:
+            data = u"\N{REPLACEMENT CHARACTER}"
 
         self.handle_data(data)
 
@@ -102,9 +85,6 @@ class BeautifulSoupHTMLParser(HTMLParser):
         self.soup.endData()
         if data.startswith("DOCTYPE "):
             data = data[len("DOCTYPE "):]
-        elif data == 'DOCTYPE':
-            # i.e. "<!DOCTYPE>"
-            data = ''
         self.soup.handle_data(data)
         self.soup.endData(Doctype)
 
@@ -120,6 +100,14 @@ class BeautifulSoupHTMLParser(HTMLParser):
 
     def handle_pi(self, data):
         self.soup.endData()
+        if data.endswith("?") and data.lower().startswith("xml"):
+            # "An XHTML processing instruction using the trailing '?'
+            # will cause the '?' to be included in data." - HTMLParser
+            # docs.
+            #
+            # Strip the question mark so we don't end up with two
+            # question marks.
+            data = data[:-1]
         self.soup.handle_data(data)
         self.soup.endData(ProcessingInstruction)
 
@@ -127,34 +115,28 @@ class BeautifulSoupHTMLParser(HTMLParser):
 class HTMLParserTreeBuilder(HTMLTreeBuilder):
 
     is_xml = False
-    picklable = True
-    NAME = HTMLPARSER
-    features = [NAME, HTML, STRICT]
+    features = [HTML, STRICT, HTMLPARSER]
 
     def __init__(self, *args, **kwargs):
-        if CONSTRUCTOR_TAKES_STRICT and not CONSTRUCTOR_STRICT_IS_DEPRECATED:
+        if CONSTRUCTOR_TAKES_STRICT:
             kwargs['strict'] = False
-        if CONSTRUCTOR_TAKES_CONVERT_CHARREFS:
-            kwargs['convert_charrefs'] = False
         self.parser_args = (args, kwargs)
 
     def prepare_markup(self, markup, user_specified_encoding=None,
-                       document_declared_encoding=None, exclude_encodings=None):
+                       document_declared_encoding=None):
         """
         :return: A 4-tuple (markup, original encoding, encoding
         declared within markup, whether any characters had to be
         replaced with REPLACEMENT CHARACTER).
         """
-        if isinstance(markup, str):
-            yield (markup, None, None, False)
-            return
+        if isinstance(markup, unicode):
+            return markup, None, None, False
 
         try_encodings = [user_specified_encoding, document_declared_encoding]
-        dammit = UnicodeDammit(markup, try_encodings, is_html=True,
-                               exclude_encodings=exclude_encodings)
-        yield (dammit.markup, dammit.original_encoding,
-               dammit.declared_html_encoding,
-               dammit.contains_replacement_characters)
+        dammit = UnicodeDammit(markup, try_encodings, is_html=True)
+        return (dammit.markup, dammit.original_encoding,
+                dammit.declared_html_encoding,
+                dammit.contains_replacement_characters)
 
     def feed(self, markup):
         args, kwargs = self.parser_args
@@ -162,7 +144,7 @@ class HTMLParserTreeBuilder(HTMLTreeBuilder):
         parser.soup = self.soup
         try:
             parser.feed(markup)
-        except HTMLParseError as e:
+        except HTMLParseError, e:
             warnings.warn(RuntimeWarning(
                 "Python's built-in HTMLParser cannot parse the given document. This is not a bug in Beautiful Soup. The best solution is to install an external parser (lxml or html5lib), and use Beautiful Soup with that parser. See http://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser for help."))
             raise e

@@ -1,6 +1,5 @@
 eclipse.preferences.version=1
 encoding//lib/bs4/dammit.py=utf-8
-encoding//lib/itsdangerous.py=utf-8
 encoding//util/__init__.py=utf-8
 encoding//util/store_manager.py=utf-8
 encoding/main.py=utf-8

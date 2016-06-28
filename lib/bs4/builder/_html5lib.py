@@ -2,7 +2,6 @@ __all__ = [
     'HTML5TreeBuilder',
     ]
 
-from pdb import set_trace
 import warnings
 from bs4.builder import (
     PERMISSIVE,
@@ -10,10 +9,7 @@ from bs4.builder import (
     HTML_5,
     HTMLTreeBuilder,
     )
-from bs4.element import (
-    NamespacedAttribute,
-    whitespace_re,
-)
+from bs4.element import NamespacedAttribute
 import html5lib
 from html5lib.constants import namespaces
 from bs4.element import (
@@ -26,21 +22,12 @@ from bs4.element import (
 class HTML5TreeBuilder(HTMLTreeBuilder):
     """Use html5lib to build a tree."""
 
-    NAME = "html5lib"
+    features = ['html5lib', PERMISSIVE, HTML_5, HTML]
 
-    features = [NAME, PERMISSIVE, HTML_5, HTML]
-
-    def prepare_markup(self, markup, user_specified_encoding,
-                       document_declared_encoding=None, exclude_encodings=None):
+    def prepare_markup(self, markup, user_specified_encoding):
         # Store the user-specified encoding for use later on.
         self.user_specified_encoding = user_specified_encoding
-
-        # document_declared_encoding and exclude_encodings aren't used
-        # ATM because the html5lib TreeBuilder doesn't use
-        # UnicodeDammit.
-        if exclude_encodings:
-            warnings.warn("You provided a value for exclude_encoding, but the html5lib tree builder doesn't support exclude_encoding.")
-        yield (markup, None, None, False)
+        return markup, None, None, False
 
     # These methods are defined by Beautiful Soup.
     def feed(self, markup):
@@ -50,7 +37,7 @@ class HTML5TreeBuilder(HTMLTreeBuilder):
         doc = parser.parse(markup, encoding=self.user_specified_encoding)
 
         # Set the character encoding detected by the tokenizer.
-        if isinstance(markup, str):
+        if isinstance(markup, unicode):
             # We need to special-case this because html5lib sets
             # charEncoding to UTF-8 if it gets Unicode input.
             doc.original_encoding = None
@@ -64,7 +51,7 @@ class HTML5TreeBuilder(HTMLTreeBuilder):
 
     def test_fragment_to_document(self, fragment):
         """See `TreeBuilder`."""
-        return '<html><head></head><body>%s</body></html>' % fragment
+        return u'<html><head></head><body>%s</body></html>' % fragment
 
 
 class TreeBuilderForHtml5lib(html5lib.treebuilders._base.TreeBuilder):
@@ -114,16 +101,7 @@ class AttrList(object):
     def __iter__(self):
         return list(self.attrs.items()).__iter__()
     def __setitem__(self, name, value):
-        # If this attribute is a multi-valued attribute for this element,
-        # turn its value into a list.
-        list_attr = HTML5TreeBuilder.cdata_list_attributes
-        if (name in list_attr['*']
-            or (self.element.name in list_attr
-                and name in list_attr[self.element.name])):
-            # A node that is being cloned may have already undergone
-            # this procedure.
-            if not isinstance(value, list):
-                value = whitespace_re.split(value)
+        "set attr", name, value
         self.element[name] = value
     def items(self):
         return list(self.attrs.items())
@@ -145,62 +123,22 @@ class Element(html5lib.treebuilders._base.Node):
         self.namespace = namespace
 
     def appendChild(self, node):
-        string_child = child = None
-        if isinstance(node, str):
-            # Some other piece of code decided to pass in a string
-            # instead of creating a TextElement object to contain the
-            # string.
-            string_child = child = node
-        elif isinstance(node, Tag):
-            # Some other piece of code decided to pass in a Tag
-            # instead of creating an Element object to contain the
-            # Tag.
-            child = node
-        elif node.element.__class__ == NavigableString:
-            string_child = child = node.element
-        else:
-            child = node.element
-
-        if not isinstance(child, str) and child.parent is not None:
-            node.element.extract()
-
-        if (string_child and self.element.contents
+        if (node.element.__class__ == NavigableString and self.element.contents
             and self.element.contents[-1].__class__ == NavigableString):
-            # We are appending a string onto another string.
-            # TODO This has O(n^2) performance, for input like
+            # Concatenate new text onto old text node
+            # XXX This has O(n^2) performance, for input like
             # "a</a>a</a>a</a>..."
             old_element = self.element.contents[-1]
-            new_element = self.soup.new_string(old_element + string_child)
+            new_element = self.soup.new_string(old_element + node.element)
             old_element.replace_with(new_element)
-            self.soup._most_recent_element = new_element
         else:
-            if isinstance(node, str):
-                # Create a brand new NavigableString from this string.
-                child = self.soup.new_string(node)
-
-            # Tell Beautiful Soup to act as if it parsed this element
-            # immediately after the parent's last descendant. (Or
-            # immediately after the parent, if it has no children.)
-            if self.element.contents:
-                most_recent_element = self.element._last_descendant(False)
-            elif self.element.next_element is not None:
-                # Something from further ahead in the parse tree is
-                # being inserted into this earlier element. This is
-                # very annoying because it means an expensive search
-                # for the last element in the tree.
-                most_recent_element = self.soup._last_descendant()
-            else:
-                most_recent_element = self.element
-
-            self.soup.object_was_parsed(
-                child, parent=self.element,
-                most_recent_element=most_recent_element)
+            self.element.append(node.element)
+            node.parent = self
 
     def getAttributes(self):
         return AttrList(self.element)
 
     def setAttributes(self, attributes):
-
         if attributes is not None and len(attributes) > 0:
 
             converted_attributes = []
@@ -212,7 +150,7 @@ class Element(html5lib.treebuilders._base.Node):
 
             self.soup.builder._replace_cdata_list_attribute_values(
                 self.name, attributes)
-            for name, value in list(attributes.items()):
+            for name, value in attributes.items():
                 self.element[name] = value
 
             # The attributes may contain variables that need substitution.
@@ -224,11 +162,11 @@ class Element(html5lib.treebuilders._base.Node):
     attributes = property(getAttributes, setAttributes)
 
     def insertText(self, data, insertBefore=None):
+        text = TextNode(self.soup.new_string(data), self.soup)
         if insertBefore:
-            text = TextNode(self.soup.new_string(data), self.soup)
-            self.insertBefore(data, insertBefore)
+            self.insertBefore(text, insertBefore)
         else:
-            self.appendChild(data)
+            self.appendChild(text)
 
     def insertBefore(self, node, refNode):
         index = self.element.index(refNode.element)
@@ -245,64 +183,16 @@ class Element(html5lib.treebuilders._base.Node):
     def removeChild(self, node):
         node.element.extract()
 
-    def reparentChildren(self, new_parent):
-        """Move all of this tag's children into another tag."""
-        # print "MOVE", self.element.contents
-        # print "FROM", self.element
-        # print "TO", new_parent.element
-        element = self.element
-        new_parent_element = new_parent.element
-        # Determine what this tag's next_element will be once all the children
-        # are removed.
-        final_next_element = element.next_sibling
-
-        new_parents_last_descendant = new_parent_element._last_descendant(False, False)
-        if len(new_parent_element.contents) > 0:
-            # The new parent already contains children. We will be
-            # appending this tag's children to the end.
-            new_parents_last_child = new_parent_element.contents[-1]
-            new_parents_last_descendant_next_element = new_parents_last_descendant.next_element
-        else:
-            # The new parent contains no children.
-            new_parents_last_child = None
-            new_parents_last_descendant_next_element = new_parent_element.next_element
-
-        to_append = element.contents
-        append_after = new_parent_element.contents
-        if len(to_append) > 0:
-            # Set the first child's previous_element and previous_sibling
-            # to elements within the new parent
-            first_child = to_append[0]
-            if new_parents_last_descendant:
-                first_child.previous_element = new_parents_last_descendant
+    def reparentChildren(self, newParent):
+        while self.element.contents:
+            child = self.element.contents[0]
+            child.extract()
+            if isinstance(child, Tag):
+                newParent.appendChild(
+                    Element(child, self.soup, namespaces["html"]))
             else:
-                first_child.previous_element = new_parent_element
-            first_child.previous_sibling = new_parents_last_child
-            if new_parents_last_descendant:
-                new_parents_last_descendant.next_element = first_child
-            else:
-                new_parent_element.next_element = first_child
-            if new_parents_last_child:
-                new_parents_last_child.next_sibling = first_child
-
-            # Fix the last child's next_element and next_sibling
-            last_child = to_append[-1]
-            last_child.next_element = new_parents_last_descendant_next_element
-            if new_parents_last_descendant_next_element:
-                new_parents_last_descendant_next_element.previous_element = last_child
-            last_child.next_sibling = None
-
-        for child in to_append:
-            child.parent = new_parent_element
-            new_parent_element.contents.append(child)
-
-        # Now that this element has no children, change its .next_element.
-        element.contents = []
-        element.next_element = final_next_element
-
-        # print "DONE WITH MOVE"
-        # print "FROM", self.element
-        # print "TO", new_parent_element
+                newParent.appendChild(
+                    TextNode(child, self.soup))
 
     def cloneNode(self):
         tag = self.soup.new_tag(self.element.name, self.namespace)
