@@ -21,6 +21,12 @@ def hello():
     """Return a friendly HTTP greeting."""
     return 'Hello World!22'
 
+@app.route('/lotto')
+def lotto():
+    """Return a friendly HTTP greeting."""
+    storeList = store_manager.get_store_list();
+    return storeList
+
 @app.route('/other')
 def helloOther():
     """Return a friendly HTTP greeting."""
