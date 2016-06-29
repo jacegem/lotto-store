@@ -28,6 +28,8 @@ search_gugun_url = 'http://nlotto.co.kr/lotto645Stat.do?method=searchGUGUN'
 sido_list = ['서울', '경기', '부산', '대구', '인천', '대전', '울산', '강원', '충북', '충남', '광주', '전북', '전남', '경북', '경남', '제주', '세종']
 
 
+
+
 def get_gugun_list(sido):
     search_url = search_gugun_url + "&SIDO=" + sido;
     request = urllib2.Request(search_url, headers=hdr)
