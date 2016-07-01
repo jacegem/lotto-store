@@ -8,7 +8,7 @@ Created on 2016. 6. 28.
 from google.appengine.ext import ndb
 
 
-class Store(ndb.Model):
+class Store(ndb.Model):###
     '''
     classdocs 클래스 설명  
     '''

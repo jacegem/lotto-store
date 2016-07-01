@@ -5,7 +5,9 @@ Created on 2016. 6. 28.
 @author: jacegem@gmail.com
 '''
 import urllib2
+import urllib
 import json
+from google.appengine.api import urlfetch
 
 # 한글입력가능?
 # TODO: beautifulsoup 을 사용하자.
@@ -23,45 +25,87 @@ hdr = {
 url = 'http://nlotto.co.kr/game.do?method=sellerInfo645Result&searchType=1&'
 
 store_home_url = 'http://nlotto.co.kr/game.do?method=sellerInfo645'
-search_gugun_url = 'http://nlotto.co.kr/lotto645Stat.do?method=searchGUGUN'
+
 
 sido_list = ['서울', '경기', '부산', '대구', '인천', '대전', '울산', '강원', '충북', '충남', '광주', '전북', '전남', '경북', '경남', '제주', '세종']
+sido_dic = {'충북':'충청북도', '충남':'충청남도', '전북':'전라북도', '전남':'전라남도', '경북':'경상북도', '경남':'경상남도', '세종':'세종특별자치시' }
 
 
 def get_gugun_list(sido):
-    search_url = search_gugun_url + "&SIDO=" + sido;
-    request = urllib2.Request(search_url, headers=hdr)
-    response = urllib2.urlopen(request)
-    html = response.read().decode('euc-kr', "ignore")
-    data = json.loads(html)
+    sido = sido_dic.get(sido, sido)
+    param = {'SIDO':sido}
+    encoded = urllib.urlencode(param)
+    search_gugun_url = 'http://nlotto.co.kr/lotto645Stat.do?method=searchGUGUN&'
+    url = search_gugun_url + encoded
+    html = urlfetch.fetch( url, headers=hdr ).content.decode('euc-kr', 'ignore')   
+#     data = json.loads(html)
     dataenc = [d.encode('utf-8') for d in json.loads(html)]
-    print '--' * 20
-    print data
-    return data
+#     print '--' * 20
+#     print data
+    return dataenc
+
+def get_sido_store_list(sido, gugun_list):
+    sido_total_list = []
+    
+    for gugun in gugun_list:        
+        page = 1
+        lastPage = 999
+    
+        ## 마지막 페이지를 읽어서 계속 요청해야 함.
+        while (page <= lastPage):
+            param = {'nowPage':str(page), 'sltSIDO':sido, 'sltGUGUN': gugun}
+            encoded = urllib.urlencode(param) 
+#             url = "http://nlotto.co.kr/game.do?method=sellerInfo645Result&searchType=1&nowPage=" + str(page) + "&sltSIDO=" + sido + "&sltGUGUN=" + gugun
+            url  = "http://nlotto.co.kr/game.do?method=sellerInfo645Result&searchType=1&" + encoded
+            print url, "요청함", sido, gugun
+            print "curpage:", page, "\tlastpage:", lastPage
+#             request = urllib2.Request(url, headers=hdr)            
+#             response = urllib2.urlopen(request)
+#             html = response.read().decode('euc-kr', "ignore")
+            html = urlfetch.fetch( url, headers=hdr ).content.decode('euc-kr', 'ignore')   
+            data = json.loads(html)
+            lastPage = data["pageEnd"]
+            store_list = data["arr"]
+
+            print "결과 데이터 수:", len(store_list)
+            page += 1            
+            sido_total_list.extend(store_list)
+            print sido, " 지역 결과 데이터 수:", len(sido_total_list)
+            
+        
+    return sido_total_list
+    
+    
+    
 
 def get_store_list():
-    gugun = get_gugun_list()
+    total_list = []
+    for sido in sido_list:
+        gugun_list = get_gugun_list(sido)        
+        sido_store_list = get_sido_store_list(sido, gugun_list)
+        total_list.extend(sido_store_list)
+
     
-    response = urllib2.urlopen(store_home_url) 
-    print response.info()
-    html = response.read()
-    print html
-    response.close()  # best practice to close the file
-    soup = BeautifulSoup(html, 'html.parser')
-    scripts = soup.find_all("script")
-    for script in scripts:
-        s = script.string
-        if isinstance(s, unicode):
-            s = s.encode('utf-8')
-        print s
-    pass
-    main_menu = soup.find(id="mainMenu")
-    lis = main_menu.find_all('li')
-    result = []
-    for i in lis:
-        result.append(i)
-    values = ','.join(str(v) for v in result)
-    return values
+#     response = urllib2.urlopen(store_home_url) 
+#     print response.info()
+#     html = response.read()
+#     print html
+#     response.close()  # best practice to close the file
+#     soup = BeautifulSoup(html, 'html.parser')
+#     scripts = soup.find_all("script")
+#     for script in scripts:
+#         s = script.string
+#         if isinstance(s, unicode):
+#             s = s.encode('utf-8')
+#         print s
+#     pass
+#     main_menu = soup.find(id="mainMenu")
+#     lis = main_menu.find_all('li')
+#     result = []
+#     for i in lis:
+#         result.append(i)
+#     values = ','.join(str(v) for v in result)
+#     return values
     
     
 
